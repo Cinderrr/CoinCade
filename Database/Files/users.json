@@ -1,0 +1,28 @@
+{
+    "accounts": [
+        {
+        "username": "golen",
+        "password": "noleg",
+        "amount": 10000,
+        "id": 0
+        },
+        {
+        "username": "miau",
+        "password": "uaim",
+        "amount": 300000000,
+        "id": 1
+        },
+        {
+        "username": "konix",
+        "password": "xinok",
+        "amount": 100000000,
+        "id": 2
+        },
+        {
+        "username": "cinder",
+        "password": "rednic",
+        "amount": 0,
+        "id": 3
+        }
+   ]
+}
