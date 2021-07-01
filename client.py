@@ -1,6 +1,6 @@
 import socket
-import json
 import getpass
+import ast
 
 HEADER_LENGTH = 512
 
@@ -8,33 +8,106 @@ IP = "127.0.0.1"
 PORT = 3000
 
 #Basic login function that takes the given ID at face value. Highly insecure. Will need to update with sessions down the line
-def loginBase():
+def loginBase(client_socket):
     signChoice = input("Hello! Would you like to sign-up or sign in:\n1. Sign-Up\n2. Sign-In\n")
     if signChoice == '1':
-        user = loginSignUp()
+        return loginSignUp(client_socket)
     elif signChoice == '2':
-        user = loginSignIn()
+        return loginSignIn(client_socket)
     else:
         print("Invalid choice. Exiting...")
     
-    return user
+    return None
 
-def loginSignIn():
+def loginSignIn(client_socket):
     username = input("Username: ")
     password = getpass.getpass()
-    user = {username, password}
+    sendDict = {
+        "WTD": '300',
+        "username": username,
+        "password": password
+        }
 
-    return user
+    try:
+        sendDict = str(sendDict)
+        sendDict = sendDict.encode('utf-8')
+        sendDict_header = f"{len(sendDict):<{HEADER_LENGTH}}".encode('utf-8')
+        client_socket.send(sendDict_header + sendDict)
+    except:
+        print("There has been an issue sending you information. Exiting...")
+        return None
 
-def loginSignUp():
+    recvDict_header = client_socket.recv(HEADER_LENGTH)
+    if not len(recvDict_header):
+        return False
+    recvLength = int(recvDict_header.decode('utf-8').strip())
+    recvDict = client_socket.recv(recvLength).decode('utf-8')
+    returnDict = ast.literal_eval(recvDict)
+
+    print(returnDict)
+    if returnDict['response'] == '1':
+        
+        return { "username": username,
+                 "password": password,
+                 "ID": returnDict['ID']
+        }
+    else:
+        return '0'
+
+def loginSignUp(client_socket):
     username = input("Username: ")
     password = getpass.getpass()
-    user =  {username, password}
+    sendDict = {
+    "WTD": '301',
+    "username": username,
+    "password": password
+    }
 
-    return user
+    try:
+        sendDict = str(sendDict)
+        sendDict = sendDict.encode('utf-8')
+        sendDict_header = f"{len(sendDict):<{HEADER_LENGTH}}".encode('utf-8')
+        client_socket.send(sendDict_header + sendDict)
+    except:
+        print("There has been an issue sending you information. Exiting...")
+        return None
+
+    recvDict_header = client_socket.recv(HEADER_LENGTH)
+    if not len(recvDict_header):
+        return False
+    recvLength = int(recvDict_header.decode('utf-8').strip())
+    recvDict = client_socket.recv(recvLength).decode('utf-8')
+    returnDict = ast.literal_eval(recvDict)
+
+    if returnDict['response'] == '1':
+        print("Account created!")
+        return '1'
+    elif returnDict['response'] == '0':
+        print("Account already exist!")
+        return '0'
+    else:
+        print("There has been an issue")
+        return '0'
+
+def verifyUser(client_socket, user):
+    message = str(user).encode('utf-8')
+    message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+    client_socket.send(message_header + message)
+
+    recvDict_header = client_socket.recv(HEADER_LENGTH)
+    if not len(recvDict_header):
+        return False
+    recvLength = int(recvDict_header.decode('utf-8').strip())
+    returnDict = client_socket.recv(recvLength).decode('utf-8')
+
+    print(returnDict)
+    if returnDict['response'] == '1':
+        return '1'
+    else:
+        return '0'
 
 #Player starts a game. Will be prompted to select from Rock Paper Scissors or quiting.
-def startGame(client_socket, ID):
+def startGame(client_socket, user):
 
     #Prompting player for this before contacting the server side. Get everything now and send it in one quick burst of messages.
     gameMode = input("What would you like to play?\n0. Exit\n1. Rock Paper Scissors\n")
@@ -65,7 +138,6 @@ def startGame(client_socket, ID):
 
     sendDict = {
         "WTD": "0",
-        "ID": ID,
         "gameMode": gameMode,
         "betAmount": betAmount
     }
@@ -83,8 +155,6 @@ def startGame(client_socket, ID):
     clientRPS(client_socket)
 
 def joinGame(client_socket, ID):
-    WTD = '1'
-
     #Ask the user which lobby they want to join.
     #########################################
     #Currently a bug that doesnt quit them out even if the lobby doesnt exist 
@@ -229,21 +299,28 @@ def checkGames(client_socket):
         print("There has been an issue retrieving available games...")
 
     return None
-ID = 0
 
 #Start of main
 #############################################################
-user = loginBase()
+user = '0'
 
-print(user)
+while user == '0':
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((IP, PORT))
+    except:
+        print("Connection could not be made...")
+        exit()
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((IP, PORT))
+    user = loginBase(client_socket)
+    if user == '0':
+        print("You connection was not accepted")
+        
 
 while True:
     WTD = input("What would you like to do: ")
     if WTD == '0':
-        startGame(client_socket, ID)
+        startGame(client_socket, user)
     elif WTD == '1':
         joinGame(client_socket, ID)
     elif WTD == '2':
@@ -252,3 +329,4 @@ while True:
         checkGames(client_socket)
     else:
         print("Invalid entry... ")
+

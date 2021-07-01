@@ -19,7 +19,6 @@ def receive_message(client_socket):
     try:
         recvDict_header = client_socket.recv(HEADER_LENGTH)
         if not len(recvDict_header):
-            print("Fuck")
             return False
         recvLength = int(recvDict_header.decode('utf-8').strip())
         recvDict = client_socket.recv(recvLength).decode('utf-8')
@@ -28,9 +27,77 @@ def receive_message(client_socket):
         return False
     return returnDict
 
+def loginVerifyUser(client_socket, recvDict):
+    print("Sign in...")
+    json_file = open(databsePull,'r')
+    data = json.load(json_file)
+    json_file.close()
+
+    for i in data['accounts']:
+        if i['username'] == recvDict['username']:
+            message = str({
+                "response": '1',
+                "ID": i['id']
+            })
+            message = message.encode('utf-8')
+            message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+            client_socket.send(message_header + message)
+            return '1'
+
+    message = { "response": '0'}
+    message = str(message).encode('utf-8')
+    message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+    client_socket.send(message_header + message)
+    print("returning 0")
+
+    return '0'
+
 def verifyUser(client_socket):
-    print("Verifying...")
-    #RSA. Oh no.
+    recvDict = receive_message(client_socket)
+
+    print("Sign in...")
+    json_file = open(databsePull,'r')
+    data = json.load(json_file)
+    json_file.close()
+
+    if data['accounts'][int(recvDict['ID'])]['username'] == recvDict['username'] and data['accounts'][int(recvDict['ID'])]['password'] == recvDict['password']:
+            message = '1'.encode('utf-8')
+            message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+            client_socket.send(message_header + message)
+            return None
+
+    message = { "response": '0'}
+    message = str(message).encode('utf-8')
+    message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+    client_socket.send(message_header + message)
+    client_socket.close()
+    return None
+
+def signupUser(client_socket, recvDict):
+    json_file = open(databsePull,'r')
+    data = json.load(json_file)
+    json_file.close()
+
+    for i in data['accounts']:
+        if i['username'] == recvDict['username']:
+            message = str({
+                "response": '0'
+            })
+            message = message.encode('utf-8')
+            message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+            client_socket.send(message_header + message)
+            return '0'
+    
+    #Add new account
+
+    message = str({
+        "response": '1'
+    })
+    message = message.encode('utf-8')
+    message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+    client_socket.send(message_header + message)
+
+    return '1'
 
 
 
@@ -38,6 +105,8 @@ def verifyUser(client_socket):
 #This is triggered when an incoming connection wants to create a lobby
 #######################################################
 def lobbyCreate(client_socket, recvDict):
+
+    verifyUser(client_socket)
 
     #Stores the new lobby in a dict value
     newLobby = {
@@ -241,17 +310,46 @@ while True:
 
     read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
 
-    print("test")
-
     for notified_socket in read_sockets:
         if notified_socket == server_socket:
             client_socket, client_address = server_socket.accept()
             
             recvDict = receive_message(client_socket)
-    
-            print(f"Accepted new connection from {client_address[0]}:{client_address[1]}")
+            print(recvDict)
 
-            if recvDict['WTD'] == '0':
+            if recvDict is False:
+                continue
+
+            if recvDict['WTD'] == '300':
+                if loginVerifyUser(client_socket, recvDict) != '0':
+                    sockets_list.append(client_socket)
+                    clients[client_socket] = recvDict
+                    print(recvDict)
+                    print(f"Accepted new connection from {client_address[0]}:{client_address[1]}")
+                else:
+                    print(f"Denied connection with {client_address[0]}:{client_address[1]}...")
+                    
+            elif recvDict['WTD'] == '301':
+                loginVerifyUser(client_socket, recvDict)
+                print("Signup")
+                #if good continue
+                #else disconnect
+                print("Verify")
+                #if good continue
+                #else disconnect
+            else:
+                sockets_list.remove(notified_socket)
+                del clients[notified_socket]
+
+        else:
+
+            recvDict = receive_message(client_socket)
+            
+            if recvDict is False:
+                print(f"{client_address[0]}:{client_address[1]} disconnected.")
+                sockets_list.remove(notified_socket)
+                del clients[notified_socket]
+            elif recvDict['WTD'] == '0':
                 lobbyCreate(client_socket, recvDict)
             elif recvDict['WTD'] == '1':
                 lobbyJoin(client_socket, recvDict)
